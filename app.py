@@ -190,57 +190,139 @@ with col2:
     st.markdown("### Interface Results (soil-only lateral)")
     st.dataframe(df, use_container_width=True)
 
-# ---------------- Diagram (separate components) ----------------
-st.markdown("### Earth Pressure Diagram — Components Shown Separately")
-shade = st.checkbox("Shade each component", value=False)
+# ---------------- Diagram (configurable by side & component) ----------------
+st.markdown("### Earth Pressure Diagram — Select What to Show")
 
-fig, ax = plt.subplots(figsize=(8,8))
+with st.expander("Plot controls", expanded=True):
+    colA, colB, colC = st.columns([1.2, 1.6, 1.2])
+    with colA:
+        sides = st.multiselect(
+            "Sides to display",
+            ["Active (right)", "Passive (left)"],
+            default=["Active (right)", "Passive (left)"]
+        )
+    with colB:
+        components = st.multiselect(
+            "Components to display",
+            ["Soil (effective)", "Hydrostatic", "Seismic (soil)", "Hydrodynamic water", "Total"],
+            default=["Soil (effective)"]
+        )
+        st.caption("Note: Hydrodynamic water applies to the passive (left) side only.")
+    with colC:
+        shade = st.checkbox("Shade areas", value=False)
+        stacked = st.checkbox("Stack components by side", value=False)
 
-# Passive components (left; negative x)
-ax.plot(-p_passive_eff, depth, color='crimson', lw=2.0, label='Passive – Soil (effective)')
-if shade: ax.fill_betweenx(depth, 0, -p_passive_eff, color='crimson', alpha=0.12)
+# convenience flags
+show_active  = "Active (right)" in sides
+show_passive = "Passive (left)" in sides
 
-ax.plot(-hs_pass, depth, color='firebrick', lw=1.5, ls='--', label='Passive – Hydrostatic')
-if shade: ax.fill_betweenx(depth, 0, -hs_pass, color='firebrick', alpha=0.08)
+want_eff   = "Soil (effective)"   in components
+want_hs    = "Hydrostatic"        in components
+want_seis  = "Seismic (soil)"     in components
+want_hdyn  = "Hydrodynamic water" in components  # passive only
+want_total = "Total"              in components
 
-ax.plot(-p_seis_pass, depth, color='darkred', lw=1.5, ls='-.', label='Passive – Seismic (soil)')
-if shade: ax.fill_betweenx(depth, 0, -p_seis_pass, color='darkred', alpha=0.06)
+# if nothing selected, just show a note
+if not (show_active or show_passive):
+    st.info("Select at least one **Side to display**.")
+else:
+    if not any([want_eff, want_hs, want_seis, want_hdyn, want_total]):
+        st.info("Select at least one **Component**.")
+    else:
+        fig, ax = plt.subplots(figsize=(8.5, 8.5))
 
-ax.plot(-p_hdyn, depth, color='brown', lw=1.5, ls=':', label='Passive – Hydrodynamic (water)')
-if shade: ax.fill_betweenx(depth, 0, -p_hdyn, color='brown', alpha=0.06)
+        # ---------- helper to plot one series -----------
+        def plot_series(xvals, lab, color, ls='-', lw=2.0, fill_alpha=0.10, mirror=False):
+            x = -xvals if mirror else xvals
+            ax.plot(x, depth, color=color, ls=ls, lw=lw, label=lab)
+            if shade:
+                ax.fill_betweenx(depth, 0, x, color=color, alpha=fill_alpha)
 
-# Active components (right; positive x)
-ax.plot(p_active_eff, depth, color='royalblue', lw=2.0, label='Active – Soil (effective)')
-if shade: ax.fill_betweenx(depth, 0, p_active_eff, color='royalblue', alpha=0.12)
+        # ---------- ACTIVE (right, positive) -------------
+        if show_active:
+            stack_offset = np.zeros_like(depth)
+            # for stacked: add components cumulatively on each side
+            if stacked and not want_total:
+                # order: soil -> hydrostatic -> seismic
+                if want_eff:
+                    plot_series(p_active_eff, "Active – Soil (effective)", 'royalblue')
+                    stack_offset = stack_offset + p_active_eff
+                if want_hs:
+                    plot_series(stack_offset + hs_active, "Active – Hydrostatic (stacked)", 'steelblue', ls='--', lw=1.6)
+                    stack_offset = stack_offset + hs_active
+                if want_seis:
+                    plot_series(stack_offset + p_seis_active, "Active – Seismic (stacked)", 'navy', ls='-.', lw=1.6)
+                    stack_offset = stack_offset + p_seis_active
+            else:
+                if want_eff:
+                    plot_series(p_active_eff, "Active – Soil (effective)", 'royalblue')
+                if want_hs:
+                    plot_series(hs_active, "Active – Hydrostatic", 'steelblue', ls='--', lw=1.6)
+                if want_seis:
+                    plot_series(p_seis_active, "Active – Seismic (soil)", 'navy', ls='-.', lw=1.6)
+                if want_total:
+                    plot_series(p_active_total, "Active – Total", 'midnightblue', ls=':', lw=2.2, fill_alpha=0.06)
 
-ax.plot(hs_active, depth, color='steelblue', lw=1.5, ls='--', label='Active – Hydrostatic')
-if shade: ax.fill_betweenx(depth, 0, hs_active, color='steelblue', alpha=0.08)
+        # ---------- PASSIVE (left, negative) -------------
+        if show_passive:
+            stack_offset = np.zeros_like(depth)
+            if stacked and not want_total:
+                # order: soil -> hydrostatic -> seismic -> hydrodynamic
+                if want_eff:
+                    plot_series(p_passive_eff, "Passive – Soil (effective)", 'crimson', mirror=True)
+                    stack_offset = stack_offset + p_passive_eff
+                if want_hs:
+                    plot_series(stack_offset + hs_pass, "Passive – Hydrostatic (stacked)", 'firebrick', ls='--', lw=1.6, mirror=True)
+                    stack_offset = stack_offset + hs_pass
+                if want_seis:
+                    plot_series(stack_offset + p_seis_pass, "Passive – Seismic (stacked)", 'darkred', ls='-.', lw=1.6, mirror=True)
+                    stack_offset = stack_offset + p_seis_pass
+                if want_hdyn:
+                    plot_series(stack_offset + p_hdyn, "Passive – Hydrodynamic (stacked)", 'brown', ls=':', lw=1.6, mirror=True)
+                    stack_offset = stack_offset + p_hdyn
+            else:
+                if want_eff:
+                    plot_series(p_passive_eff, "Passive – Soil (effective)", 'crimson', mirror=True)
+                if want_hs:
+                    plot_series(hs_pass, "Passive – Hydrostatic", 'firebrick', ls='--', lw=1.6, mirror=True)
+                if want_seis:
+                    plot_series(p_seis_pass, "Passive – Seismic (soil)", 'darkred', ls='-.', lw=1.6, mirror=True)
+                if want_hdyn:
+                    plot_series(p_hdyn, "Passive – Hydrodynamic (water)", 'brown', ls=':', lw=1.6, mirror=True)
+                if want_total:
+                    plot_series(p_passive_total, "Passive – Total", 'maroon', ls=':', lw=2.2, mirror=True, fill_alpha=0.06)
 
-ax.plot(p_seis_active, depth, color='navy', lw=1.5, ls='-.', label='Active – Seismic (soil)')
-if shade: ax.fill_betweenx(depth, 0, p_seis_active, color='navy', alpha=0.06)
+        # excavation depth and layer lines
+        ax.axhline(exc_depth, color='k', lw=2)
+        ax.text(0, exc_depth+0.25, f'Excavation (z={exc_depth:.1f} ft)', ha='center', va='bottom', fontsize=9)
+        for zb in bottoms:
+            ax.axhline(-zb, color='k', ls='--', lw=0.7, alpha=0.35)
 
-# Excavation and layer lines
-ax.axhline(exc_depth, color='k', lw=2)
-ax.text(0, exc_depth+0.25, f'Excavation (z={exc_depth:.1f} ft)', ha='center', va='bottom', fontsize=9)
+        # axes, limits, legend
+        ax.set_xlabel("Lateral Pressure (psf)")
+        ax.set_ylabel("Depth (ft)")
+        ax.grid(True, ls="--", alpha=0.3)
+        ax.invert_yaxis()
 
-for zb in bottoms:
-    ax.axhline(-zb, color='k', ls='--', lw=0.7, alpha=0.35)
+        # Pick a symmetric x-limit based on everything we might plot
+        xmax_candidates = [1.0]
+        if show_active:
+            if want_eff:   xmax_candidates.append(p_active_eff.max())
+            if want_hs:    xmax_candidates.append(hs_active.max())
+            if want_seis:  xmax_candidates.append(p_seis_active.max())
+            if want_total: xmax_candidates.append(p_active_total.max())
+        if show_passive:
+            if want_eff:   xmax_candidates.append(p_passive_eff.max())
+            if want_hs:    xmax_candidates.append(hs_pass.max())
+            if want_seis:  xmax_candidates.append(p_seis_pass.max())
+            if want_hdyn:  xmax_candidates.append(p_hdyn.max())
+            if want_total: xmax_candidates.append(p_passive_total.max())
+        xmax = max(xmax_candidates)
+        ax.set_xlim(-1.1*xmax, 1.1*xmax)
 
-# Axes
-ax.set_xlabel("Lateral Pressure (psf)")
-ax.set_ylabel("Depth (ft)")
-ax.grid(True, ls="--", alpha=0.3)
-ax.invert_yaxis()
-
-xmax = max(
-    1.0,
-    p_active_eff.max(), hs_active.max(), p_seis_active.max(),
-    p_passive_eff.max(), hs_pass.max(), p_seis_pass.max(), p_hdyn.max()
-)
-ax.set_xlim(-1.1*xmax, 1.1*xmax)
-ax.set_title("Active (Right) and Passive (Left) — Separate Components")
-ax.legend(loc="upper right", fontsize=9)
-st.pyplot(fig)
-# ------------------ end app.py ------------------
-
-
+        title_bits = []
+        if show_active:  title_bits.append("Active")
+        if show_passive: title_bits.append("Passive")
+        ax.set_title(" / ".join(title_bits) + " — Selected Components")
+        ax.legend(loc="upper right", fontsize=9)
+        st.pyplot(fig)
