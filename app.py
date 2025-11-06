@@ -304,7 +304,9 @@ else:
 
         # excavation depth and layer lines
         ax.axhline(exc_depth, color='k', lw=2)
-        ax.text(0, exc_depth+0.25, f'Excavation (z={exc_depth:.1f} ft)', ha='center', va='bottom', fontsize=9)
+        ax.text(-xmax*0.15, exc_depth-0.2, f'Excavation (z={exc_depth:.1f} ft)', 
+        ha='right', va='top', fontsize=9, fontweight='bold')
+
         for zb in bottoms:
             ax.axhline(-zb, color='k', ls='--', lw=0.7, alpha=0.35)
 
