@@ -189,6 +189,16 @@ df = pd.DataFrame(rows, columns=[
 with col2:
     st.markdown("### Interface Results (soil-only lateral)")
     st.dataframe(df, use_container_width=True)
+# ----- Totals for convenience (used by the new plot controls) -----
+# Active side total = soil (effective) + hydrostatic + seismic
+p_active_total = p_active_eff + hs_active + p_seis_active
+
+# Passive side total = soil (effective) + hydrostatic + seismic + hydrodynamic
+p_passive_total = p_passive_eff + hs_pass + p_seis_pass + p_hdyn
+
+# Numerical safety: keep non-negative
+p_active_total  = np.maximum(0.0, p_active_total)
+p_passive_total = np.maximum(0.0, p_passive_total)
 
 # ---------------- Diagram (configurable by side & component) ----------------
 st.markdown("### Earth Pressure Diagram — Select What to Show")
