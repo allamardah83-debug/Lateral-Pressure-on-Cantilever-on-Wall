@@ -62,4 +62,4 @@ st.write("### Results", df)
 fig = px.line(df.melt(id_vars=["Soil","Top","Bottom"], value_vars=["Passive Top","Active Top"],
                       var_name="Type", value_name="Pressure (psf)"),
               x="Pressure (psf)", y="Top", color="Type", title="Pressure Profile")
-fig.update_yaxes(autorange="reversed")_
+fig.update_yaxes(autorange="reversed")
