@@ -304,8 +304,17 @@ else:
 
         # excavation depth and layer lines
         ax.axhline(exc_depth, color='k', lw=2)
-        ax.text(-xmax*0.15, exc_depth-0.2, f'Excavation (z={exc_depth:.1f} ft)', 
-        ha='right', va='top', fontsize=9, fontweight='bold')
+       # ... after you compute xmax and do:
+# ax.set_xlim(-1.1*xmax, 1.1*xmax)
+
+# Place the label slightly right of the left x-limit and a bit above the line
+xmin, xmax = ax.get_xlim()
+ax.text(
+    xmin + 0.08*(xmax - xmin),    # a little in from the left
+    exc_depth - 0.2,              # slightly above the excavation line
+    f'Excavation (z={exc_depth:.1f} ft)',
+    ha='left', va='top', fontsize=9, fontweight='bold'
+)
 
         for zb in bottoms:
             ax.axhline(-zb, color='k', ls='--', lw=0.7, alpha=0.35)
